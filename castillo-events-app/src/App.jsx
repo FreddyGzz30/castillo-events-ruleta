@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://yadshscykpobihifysnx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_UaFJ4qOiKnIq6qC5IBQg9A_Q-cDhmij";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -13,10 +12,17 @@ const CREAM = "#f5e6c8";
 const DARK  = "#0a0a0a";
 const DARK3 = "#1a1a1a";
 
+const DEFAULT_PRIZES = [
+  "10% de descuento","30 min gratis","15 fotos extra","15% de descuento",
+  "Cabina VIP 1hr","Teléfono retro gratis","","",
+];
+const LS_KEY = "castillo_prizes";
+
 function generateId() {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
 
+// ── DB ────────────────────────────────────────────────────────────────────────
 async function dbCreate(prizes) {
   const id = generateId();
   const { error } = await supabase.from("spin_links").insert({ id, prizes, used: false, result: null });
@@ -43,6 +49,7 @@ async function dbDeleteAll() {
   await supabase.from("spin_links").delete().neq("id", "___never___");
 }
 
+// ── Logo ──────────────────────────────────────────────────────────────────────
 function CastilloLogo({ size = 80 }) {
   return (
     <div style={{
@@ -57,17 +64,29 @@ function CastilloLogo({ size = 80 }) {
   );
 }
 
+// ── Ruleta ────────────────────────────────────────────────────────────────────
+// onSpinEnd(winnerIndex, finalAngleDeg) — el índice ganador se calcula DENTRO
+// de la animación para garantizar que coincide con lo dibujado.
 function SpinWheel({ prizes, spinning, rotation, onSpinEnd }) {
   const canvasRef     = useRef(null);
   const animRef       = useRef(null);
   const startRotRef   = useRef(0);
   const targetRotRef  = useRef(0);
   const startTimeRef  = useRef(0);
-  const finalAngleRef = useRef(0);
   const DURATION = 5200;
 
   const activePrizes = prizes.filter(p => p.trim() !== "");
   const count = Math.max(activePrizes.length, 1);
+  const sliceDeg = 360 / count;
+
+  // Dado un ángulo de rotación (grados), calcula qué índice queda bajo la flecha (arriba).
+  // La flecha apunta a 270° en coordenadas absolutas (arriba del canvas).
+  // El segmento i ocupa el arco [i*sliceDeg, (i+1)*sliceDeg) en coordenadas de la ruleta.
+  // Cuando la ruleta rota `angleDeg`, el punto de la ruleta que queda arriba es (-angleDeg % 360 + 360) % 360.
+  function calcWinner(angleDeg) {
+    const slotUnderArrow = (((-angleDeg) % 360) + 360) % 360;
+    return Math.floor(slotUnderArrow / sliceDeg) % count;
+  }
 
   const draw = useCallback((angleDeg) => {
     const canvas = canvasRef.current;
@@ -79,6 +98,7 @@ function SpinWheel({ prizes, spinning, rotation, onSpinEnd }) {
     const angle = (angleDeg * Math.PI) / 180;
     const slice = (2 * Math.PI) / count;
 
+    // Fondo con glow
     ctx.save();
     ctx.shadowColor = GOLD; ctx.shadowBlur = 30;
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
@@ -92,6 +112,7 @@ function SpinWheel({ prizes, spinning, rotation, onSpinEnd }) {
       ctx.fillStyle = i % 2 === 0 ? "#1c1500" : "#271c00"; ctx.fill();
       ctx.strokeStyle = GOLD + "77"; ctx.lineWidth = 1.5; ctx.stroke();
 
+      // Texto del segmento
       ctx.save(); ctx.translate(cx, cy); ctx.rotate(sa + slice / 2);
       ctx.textAlign = "right"; ctx.fillStyle = CREAM;
       const fs = count <= 4 ? 14 : count <= 6 ? 12 : 10;
@@ -107,12 +128,15 @@ function SpinWheel({ prizes, spinning, rotation, onSpinEnd }) {
       ctx.restore();
     }
 
+    // Centro
     ctx.beginPath(); ctx.arc(cx, cy, 22, 0, 2 * Math.PI);
     ctx.fillStyle = DARK; ctx.fill();
     ctx.strokeStyle = GOLD; ctx.lineWidth = 2.5; ctx.stroke();
     ctx.fillStyle = GOLD; ctx.font = "bold 16px serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("✦", cx, cy);
+
+    // Aro exterior
     ctx.beginPath(); ctx.arc(cx, cy, r - 1, 0, 2 * Math.PI);
     ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.stroke();
   }, [count, activePrizes]);
@@ -122,15 +146,20 @@ function SpinWheel({ prizes, spinning, rotation, onSpinEnd }) {
     const extra = 360 * 7 + Math.random() * 360;
     startRotRef.current = rotation;
     targetRotRef.current = rotation + extra;
-    finalAngleRef.current = targetRotRef.current % 360;
     startTimeRef.current = performance.now();
     const easeOut = t => 1 - Math.pow(1 - t, 4);
+
     const animate = (now) => {
       const p = Math.min((now - startTimeRef.current) / DURATION, 1);
       const cur = startRotRef.current + (targetRotRef.current - startRotRef.current) * easeOut(p);
       draw(cur);
-      if (p < 1) animRef.current = requestAnimationFrame(animate);
-      else onSpinEnd(finalAngleRef.current);
+      if (p < 1) {
+        animRef.current = requestAnimationFrame(animate);
+      } else {
+        const finalAngle = targetRotRef.current % 360;
+        const winnerIndex = calcWinner(finalAngle);
+        onSpinEnd(winnerIndex, finalAngle);
+      }
     };
     animRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animRef.current);
@@ -154,10 +183,15 @@ function SpinWheel({ prizes, spinning, rotation, onSpinEnd }) {
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 function AdminView({ onShowSpin }) {
-  const [prizes, setPrizes] = useState([
-    "10% de descuento","30 min gratis","15 fotos extra","15% de descuento",
-    "Cabina VIP 1hr","Teléfono retro gratis","","",
-  ]);
+  // Cargar premios desde localStorage, o usar los por defecto
+  const [prizes, setPrizes] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_PRIZES;
+  });
+  const [savedMsg, setSavedMsg]     = useState(false);
   const [genLink, setGenLink]       = useState(null);
   const [copied, setCopied]         = useState(false);
   const [history, setHistory]       = useState([]);
@@ -168,6 +202,19 @@ function AdminView({ onShowSpin }) {
 
   const active = prizes.filter(p => p.trim() !== "");
   const update = (i, v) => { const n = [...prizes]; n[i] = v; setPrizes(n); };
+
+  // Guardar premios
+  const savePrizes = () => {
+    localStorage.setItem(LS_KEY, JSON.stringify(prizes));
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2000);
+  };
+
+  // Restablecer premios por defecto
+  const resetPrizes = () => {
+    setPrizes(DEFAULT_PRIZES);
+    localStorage.setItem(LS_KEY, JSON.stringify(DEFAULT_PRIZES));
+  };
 
   useEffect(() => {
     (async () => {
@@ -220,6 +267,7 @@ function AdminView({ onShowSpin }) {
       }}/>
       <div style={{ position: "relative", zIndex: 1, maxWidth: 680, margin: "0 auto", padding: "36px 20px 80px" }}>
 
+        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 36 }}>
           <CastilloLogo size={68}/>
           <div>
@@ -231,8 +279,9 @@ function AdminView({ onShowSpin }) {
 
         <div style={{ height: 1, background: `linear-gradient(90deg,transparent,${GOLD},transparent)`, marginBottom: 32 }}/>
 
+        {/* Premios */}
         <div style={{ fontSize: 9, letterSpacing: 5, color: GOLD, marginBottom: 18 }}>CONFIGURA LOS PREMIOS</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
           {prizes.map((p, i) => (
             <div key={i} style={{ position: "relative" }}>
               <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: GOLD + "77", fontWeight: 700 }}>{i + 1}</span>
@@ -249,12 +298,33 @@ function AdminView({ onShowSpin }) {
           ))}
         </div>
 
+        {/* Botones guardar / restablecer */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+          <button onClick={savePrizes} style={{
+            flex: 1, padding: "10px",
+            background: savedMsg ? "#1a2e00" : "transparent",
+            border: `1px solid ${savedMsg ? "#6aaa00" : GOLD + "66"}`,
+            borderRadius: 7, color: savedMsg ? "#aaee00" : GOLD,
+            fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 3, cursor: "pointer", transition: "all .2s",
+          }}>
+            {savedMsg ? "✓ GUARDADO" : "GUARDAR PREMIOS"}
+          </button>
+          <button onClick={resetPrizes} style={{
+            padding: "10px 18px", background: "transparent",
+            border: "1px solid #ff444433", borderRadius: 7, color: "#ff666677",
+            fontFamily: "'Cinzel', serif", fontSize: 10, letterSpacing: 2, cursor: "pointer",
+          }}>
+            RESTABLECER
+          </button>
+        </div>
+
         <div style={{ fontSize: 10, color: active.length < 2 ? "#c9a84c66" : GOLD + "99", textAlign: "center", marginBottom: 28, letterSpacing: 1 }}>
           {active.length < 2 ? "⚠ Agrega al menos 2 premios" : `✦ ${active.length} premios activos`}
         </div>
 
         <div style={{ height: 1, background: `linear-gradient(90deg,transparent,${GOLD}44,transparent)`, marginBottom: 28 }}/>
 
+        {/* Generar link */}
         <button onClick={generate} disabled={active.length < 2 || loading} style={{
           width: "100%", padding: "17px",
           background: active.length < 2 || loading ? "#141414" : `linear-gradient(135deg,#c9a84c,#9a7020,#c9a84c)`,
@@ -301,6 +371,7 @@ function AdminView({ onShowSpin }) {
 
         <div style={{ height: 1, background: `linear-gradient(90deg,transparent,${GOLD}22,transparent)`, margin: "32px 0 24px" }}/>
 
+        {/* Historial */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div style={{ fontSize: 9, letterSpacing: 5, color: GOLD }}>HISTORIAL DE LINKS</div>
           {history.length > 0 && (
@@ -375,7 +446,15 @@ function SpinView({ spinId, onBack }) {
   useEffect(() => {
     (async () => {
       if (isDemo) {
-        setPrizes(["10% descuento","30 min gratis","15 fotos extra","15% descuento","Cabina VIP","Teléfono retro","Sorpresa ✨","2x1 servicio"]);
+        // En demo usamos los premios guardados en localStorage si existen
+        try {
+          const saved = localStorage.getItem(LS_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved).filter(p => p.trim() !== "");
+            if (parsed.length >= 2) { setPrizes(parsed); setPhase("ready"); return; }
+          }
+        } catch {}
+        setPrizes(DEFAULT_PRIZES.filter(p => p.trim() !== ""));
         setPhase("ready"); return;
       }
       const data = await dbGet(spinId);
@@ -386,15 +465,11 @@ function SpinView({ spinId, onBack }) {
     })();
   }, [spinId]);
 
-  const handleSpinEnd = async (finalAngle) => {
+  // onSpinEnd recibe (winnerIndex, finalAngle)
+  const handleSpinEnd = async (winnerIndex, finalAngle) => {
     setSpinning(false);
     setRotation(finalAngle);
-    const count = prizes.length;
-    const slice = 360 / count;
-    // Cálculo correcto: qué segmento queda bajo la flecha (arriba = 270°)
-    const normalized = ((270 - finalAngle) % 360 + 360) % 360;
-    const index = Math.floor(normalized / slice) % count;
-    const won = prizes[index];
+    const won = prizes[winnerIndex];
     if (!isDemo) await dbMarkSpun(spinId, won);
     setResult(won);
     setPhase("done");
@@ -463,7 +538,7 @@ function SpinView({ spinId, onBack }) {
         }}/>
       ))}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6, zIndex: 1, position: "relative", width: "100%", maxWidth: 360, justifyContent: "center" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6, zIndex: 1 }}>
         <CastilloLogo size={52}/>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, color: CREAM }}>Castillo Events</div>
@@ -529,6 +604,7 @@ function SpinView({ spinId, onBack }) {
   );
 }
 
+// ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [view, setView]     = useState("admin");
   const [spinId, setSpinId] = useState(null);
