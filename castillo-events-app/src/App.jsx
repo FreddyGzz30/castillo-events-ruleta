@@ -48,24 +48,16 @@ async function dbMarkSpun(id, result) {
 function CastilloLogo({ size = 80 }) {
   return (
     <div style={{
-      width: size, height: size, borderRadius: "50%", background: DARK,
-      border: `2px solid ${GOLD}`, display: "flex", alignItems: "center",
-      justifyContent: "center", boxShadow: `0 0 24px ${GOLD}44`, flexShrink: 0,
+      width: size, height: size, borderRadius: "50%",
+      overflow: "hidden", flexShrink: 0,
+      boxShadow: `0 0 24px ${GOLD}44`,
+      border: `2px solid ${GOLD}`,
     }}>
-      <svg width={size * 0.68} height={size * 0.68} viewBox="0 0 100 100" fill="none">
-        <rect x="8" y="38" width="12" height="28" rx="1" fill={CREAM} opacity="0.9"/>
-        <polygon points="8,38 14,24 20,38" fill={CREAM} opacity="0.9"/>
-        <rect x="10" y="30" width="8" height="5" rx="1" fill={DARK}/>
-        <rect x="80" y="38" width="12" height="28" rx="1" fill={CREAM} opacity="0.9"/>
-        <polygon points="80,38 86,24 92,38" fill={CREAM} opacity="0.9"/>
-        <rect x="82" y="30" width="8" height="5" rx="1" fill={DARK}/>
-        <rect x="32" y="32" width="36" height="34" rx="1" fill={CREAM} opacity="0.95"/>
-        <polygon points="32,32 50,12 68,32" fill={CREAM} opacity="0.95"/>
-        <rect x="37" y="20" width="10" height="7" rx="1" fill={DARK}/>
-        <path d="M42 66 Q42 54 50 54 Q58 54 58 66 Z" fill={DARK}/>
-        <rect x="45" y="38" width="10" height="8" rx="2" fill={DARK}/>
-        <path d="M4 72 Q50 85 96 72" stroke={GOLD} strokeWidth="1.5" fill="none" opacity="0.6"/>
-      </svg>
+      <img
+        src="/logo.jpeg"
+        alt="Castillo Events"
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
     </div>
   );
 }
