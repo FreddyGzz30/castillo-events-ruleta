@@ -267,6 +267,19 @@ function AdminView({ onShowSpin }) {
       }}/>
       <div style={{ position: "relative", zIndex: 1, maxWidth: 680, margin: "0 auto", padding: "36px 20px 80px" }}>
 
+        {/* Botón recargar */}
+        <button onClick={() => window.location.reload()} title="Recargar página" style={{
+          position: "fixed", top: 16, right: 16, zIndex: 100,
+          width: 40, height: 40, borderRadius: "50%",
+          background: DARK3, border: `1px solid ${GOLD}44`,
+          color: GOLD, fontSize: 20, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: `0 0 12px ${GOLD}22`, transition: "all .2s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.boxShadow = `0 0 20px ${GOLD}55`; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = GOLD+"44"; e.currentTarget.style.boxShadow = `0 0 12px ${GOLD}22`; }}
+        >↻</button>
+
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 36 }}>
           <CastilloLogo size={68}/>
